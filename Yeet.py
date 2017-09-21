@@ -1,8 +1,7 @@
 import random
-from pandas import read_csv
+from pandas import read_csv, DataFrame
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Reshape
-from keras.layers.embeddings import Embedding
 from keras.optimizers import SGD
 from textblob import TextBlob
 
@@ -24,13 +23,13 @@ def processCAHData():
 def defineModel():
     model = Sequential()
 
-    model.add(Dense(64, input_shape=(2,), kernel_initializer='random_uniform',
+    model.add(Dense(64, input_shape=(1,), kernel_initializer='random_uniform',
                 bias_initializer='zeros'))
     model.add(Activation('tanh'))
-    model.add(Dense(64, input_shape=(2,), kernel_initializer='random_uniform',
+    model.add(Dense(64, input_shape=(3,), kernel_initializer='random_uniform',
                 bias_initializer='zeros'))
     model.add(Activation('tanh'))
-    model.add(Dense(64, input_shape=(2,), kernel_initializer='random_uniform',
+    model.add(Dense(64, input_shape=(3,), kernel_initializer='random_uniform',
                 bias_initializer='zeros'))
     model.add(Activation('tanh'))
     model.add(Dropout(0, 4))
@@ -86,12 +85,16 @@ def generateResponse(responses, count):
 
     return resp, resp_id
 
-def rate(prompts, responses):
+def generateSentence(prompts, responses):
     text, count, prompt_id = generatePrompt(prompts)
     respar, resp_id = generateResponse(responses, count)
     print(text.format(*respar))
     textbl = TextBlob(text.format(*respar))
-    print("Sentiment Analysis : ", str(textbl.polarity))
+    textblsent = textbl.polarity
+    print("Sentiment Analysis : ", str(textblsent))
+    return prompt_id, resp_id, textblsent
+
+def rate(prompts, responses):
     while True:
         try:
             rating = input("Rate this on a scale of 1-3: ")
@@ -106,9 +109,8 @@ def rate(prompts, responses):
             print("This number is below 0. Try again.")
             continue
         break
-    print("")
     rating = rating - 1
-    return rating, prompt_id, resp_id
+    return rating
 
 def __main__():
     print("Libraries initialized")
@@ -120,33 +122,45 @@ def __main__():
     print("Compiling model")
     sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9)
     model.compile(optimizer=sgd, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    try:
+        model.load_weights("weights.hdf5")
+    except OSError:
+        pass
+    except ValueError:
+        pass
     print("Cards Against Humanity Generator")
     print("Scale of Hilarity")
     print("1 - Not Funny")
     print("2 - Kind of Funny/Eh")
     print("3 - Funny")
     print("")
-    x = []
-    y = []
+    x = DataFrame()
+    y = DataFrame()
     for i in range(0,9):
         print("Training item : " + str(i+1))
-        rating, prompt_id, resp_id = rate(prompts, responses)
-        x.append([prompt_id, resp_id])
-        y.append(rating)
-    print("X:")
-    print(x)
-    print("Y:")
-    print(y)
+        prompt_id, resp_id, sent = generateSentence(prompts, responses)
+        rating = rate(prompts, responses)
+        x[i] = [prompt_id, resp_id, sent]
+        y[i] = rating
+        print("")
     model.fit(x, y, batch_size=1, epochs=10)
+    model.save_weights("weights.hdf5")
     while True:
-        new_x = []
-        new_y = []
-        rating, prompt_id, resp_id = rate(prompts, responses)
-        new_x.append([prompt_id, resp_id])
+        new_x = DataFrame()
+        new_y = DataFrame()
+        print("")
+        prompt_id, resp_id, sent = generateSentence(prompts, responses)
+        new_x[0] = [prompt_id, resp_id, sent]
+        prediction = model.predict(new_x, batch_size=1)
+        print("Model Prediction : ")
+        prediction = prediction[0]
+        print("1 : " + str(prediction[0]))
+        print("2 : " + str(prediction[1]))
+        print("3 : " + str(prediction[2]))
+        rating = rate(prompts, responses)
         new_y.append(rating)
-        prediction = model.predict(x)
-        print("Model Prediction : " + str(prediction))
-        model.fit(x, y, batch_size=1, epochs=1)
+        model.fit(new_x, new_y, batch_size=1, epochs=1)
+        model.save_weights("weights.hdf5")
 
 
 __main__()
