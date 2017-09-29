@@ -1,5 +1,5 @@
 import random
-from pandas import read_csv, DataFrame
+from pandas import read_csv, DataFrame, Series
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Reshape
 from keras.optimizers import SGD
@@ -23,7 +23,7 @@ def processCAHData():
 def defineModel():
     model = Sequential()
 
-    model.add(Dense(64, input_shape=(1,), kernel_initializer='random_uniform',
+    model.add(Dense(64, input_shape=(3,), kernel_initializer='random_uniform',
                 bias_initializer='zeros'))
     model.add(Activation('tanh'))
     model.add(Dense(64, input_shape=(3,), kernel_initializer='random_uniform',
@@ -80,8 +80,7 @@ def generateResponse(responses, count):
             if count == 1:
                 resp_id = resp_id + int(responses[responses == r].index[0]) * 10000
             elif count == 2:
-                resp_id = resp_id + int(responses[responses == r].index[0])
-    
+                resp_id = resp_id + int(responses[responses == r].index[0])   
 
     return resp, resp_id
 
@@ -134,32 +133,40 @@ def __main__():
     print("2 - Kind of Funny/Eh")
     print("3 - Funny")
     print("")
-    x = DataFrame()
-    y = DataFrame()
-    for i in range(0,9):
-        print("Training item : " + str(i+1))
-        prompt_id, resp_id, sent = generateSentence(prompts, responses)
-        rating = rate(prompts, responses)
-        x[i] = [prompt_id, resp_id, sent]
-        y[i] = rating
-        print("")
-    model.fit(x, y, batch_size=1, epochs=10)
+    x = DataFrame(columns=[0, 1, 2])
+    y = DataFrame(columns=[0])
+    prompt_id, resp_id, sent = generateSentence(prompts, responses)
+    rating = rate(prompts, responses)
+    x.loc[0] = [prompt_id, resp_id, sent]
+    y.loc[0] = rating
+    prompt_id, resp_id, sent = generateSentence(prompts, responses)
+    rating = rate(prompts, responses)
+    x.loc[1] = [prompt_id, resp_id, sent]
+    y.loc[1] = rating
+    y.reset_index
+    x.reset_index
+    print("")
+    print("X :")
+    print(x)
+    print("Y :")
+    print(y)
+    model.fit(x, y, batch_size=1, epochs=1)
     model.save_weights("weights.hdf5")
     while True:
-        new_x = DataFrame()
-        new_y = DataFrame()
+        x = DataFrame()
+        y = DataFrame(columns=['y'])
         print("")
         prompt_id, resp_id, sent = generateSentence(prompts, responses)
-        new_x[0] = [prompt_id, resp_id, sent]
-        prediction = model.predict(new_x, batch_size=1)
+        x = x.append(Series([prompt_id, resp_id, sent]))
+        prediction = model.predict(x, batch_size=1)
         print("Model Prediction : ")
         prediction = prediction[0]
         print("1 : " + str(prediction[0]))
         print("2 : " + str(prediction[1]))
         print("3 : " + str(prediction[2]))
         rating = rate(prompts, responses)
-        new_y.append(rating)
-        model.fit(new_x, new_y, batch_size=1, epochs=1)
+        y.set_value(0, 'y', rating)
+        model.fit(x, y, batch_size=1, epochs=1)
         model.save_weights("weights.hdf5")
 
 
